@@ -178,6 +178,7 @@ func (sd *ScaleDown) UpdateUnneededNodes(
 		// Old-time marked nodes are again eligible for deletion - something went wrong with them
 		// and they have not been deleted.
 		deleteTime, _ := deletetaint.GetToBeDeletedTime(node)
+		glog.Errorf("%v %v %v %v", deleteTime, timestamp, MaxCloudProviderNodeDeletionTime, MaxKubernetesEmptyNodeDeletionTime)
 		if deleteTime != nil && (timestamp.Sub(*deleteTime) < MaxCloudProviderNodeDeletionTime || timestamp.Sub(*deleteTime) < MaxKubernetesEmptyNodeDeletionTime) {
 			glog.V(1).Infof("Skipping %s from delete considerations - the node is currently being deleted", node.Name)
 			continue
