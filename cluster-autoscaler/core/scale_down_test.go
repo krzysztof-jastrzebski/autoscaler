@@ -38,7 +38,6 @@ import (
 	core "k8s.io/client-go/testing"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
 )
 
 func TestFindUnneededNodes(t *testing.T) {
@@ -844,9 +843,18 @@ func TestCleanUpNodeAutoprovisionedGroups(t *testing.T) {
 
 	provider := testprovider.NewTestAutoprovisioningCloudProvider(
 		nil, nil,
-		nil, nil,
+		nil, func(id string) error {
+			if id == "ng2"{
+				return nil
+			}
+			return fmt.Errorf("Node group %s shouldn't be deleted", id)
+		},
 		nil, nil)
 	provider.AddNodeGroup("ng1", 1, 10, 1)
-	provider.AddNode("ng1", n1)
+	provider.AddAutoprovisionedNodeGroup("ng2", 0, 10, 0, "mt1")
+	provider.AddAutoprovisionedNodeGroup("ng3", 0, 10, 1, "mt1")
+	provider.AddNode("ng3", n1)
 	assert.NotNil(t, provider)
+
+	assert.NoError(t, cleanUpNodeAutoprovisionedGroups(provider))
 }
