@@ -570,36 +570,30 @@ func TestScaleUpBalanceGroups(t *testing.T) {
 }
 
 func TestScaleUpAutoprovisionedNodeGroup(t *testing.T) {
+	createdGroups := make(chan string, 10)
+	expandedGroups := make(chan string, 10)
+
 	p1 := BuildTestPod("p1", 80, 0)
 
 	fakeClient := &fake.Clientset{}
-	fakeClient.Fake.AddReactor("list", "pods", func(action core.Action) (bool, runtime.Object, error) {
-		list := action.(core.ListAction)
-		fieldstring := list.GetListRestrictions().Fields.String()
-		if strings.Contains(fieldstring, "n1") {
-			return true, &apiv1.PodList{Items: []apiv1.Pod{*p1}}, nil
-		}
-		if strings.Contains(fieldstring, "n2") {
-			return true, &apiv1.PodList{Items: []apiv1.Pod{*p2}}, nil
-		}
-		return true, nil, fmt.Errorf("Failed to list: %v", list)
-	})
 
-	provider := testprovider.NewTestAutoprovisioningCloudProvider(func(nodeGroup string, increase int) error {
-		t.Fatalf("No expansion is expected, but increased %s by %d", nodeGroup, increase)
-		return nil
-	}, nil, nil, nil, nil, nil)
+	t1 := BuildTestNode("t1", 4000, 1000000)
+	SetNodeReadyState(t1, true, time.Time{})
+	ti1 := schedulercache.NewNodeInfo()
+	ti1.SetNode(t1)
+
+	provider := testprovider.NewTestAutoprovisioningCloudProvider(
+		func(nodeGroup string, increase int) error {
+			expandedGroups <- fmt.Sprintf("%s-%d", nodeGroup, increase)
+			return nil
+		}, nil, func(nodeGroup string) error {
+			createdGroups <- nodeGroup
+			return nil
+		}, nil, []string{"T1"}, map[string]*schedulercache.NodeInfo{"T1": ti1})
 
 	fakeRecorder := kube_util.CreateEventRecorder(fakeClient)
 	fakeLogRecorder, _ := utils.NewStatusMapRecorder(fakeClient, "kube-system", fakeRecorder, false)
 	clusterState := clusterstate.NewClusterStateRegistry(provider, clusterstate.ClusterStateRegistryConfig{}, fakeLogRecorder)
-	clusterState.RegisterScaleUp(&clusterstate.ScaleUpRequest{
-		NodeGroupName:   "ng2",
-		Increase:        1,
-		Time:            time.Now(),
-		ExpectedAddTime: time.Now().Add(5 * time.Minute),
-	})
-	clusterState.UpdateNodes([]*apiv1.Node{n1, n2}, time.Now())
 
 	context := &AutoscalingContext{
 		AutoscalingOptions: AutoscalingOptions{
@@ -617,12 +611,12 @@ func TestScaleUpAutoprovisionedNodeGroup(t *testing.T) {
 		ClusterStateRegistry: clusterState,
 		LogRecorder:          fakeLogRecorder,
 	}
-	p3 := BuildTestPod("p-new", 550, 0)
 
-	result, err := ScaleUp(context, []*apiv1.Pod{p3}, []*apiv1.Node{n1, n2}, []*extensionsv1.DaemonSet{})
+	result, err := ScaleUp(context, []*apiv1.Pod{p1}, []*apiv1.Node{}, []*extensionsv1.DaemonSet{})
 	assert.NoError(t, err)
-	// A node is already coming - no need for scale up.
-	assert.False(t, result)
+	assert.True(t, result)
+	assert.Equal(t, "autoprovisioned-T1", getStringFromChan(createdGroups))
+	assert.Equal(t, "autoprovisioned-T1-1", getStringFromChan(expandedGroups))
 }
 
 func TestAddAutoprovisionedCandidatesOK(t *testing.T) {

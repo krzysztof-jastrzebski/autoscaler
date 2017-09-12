@@ -90,7 +90,8 @@ func ScaleUp(context *AutoscalingContext, unschedulablePods []*apiv1.Pod, nodes 
 	}
 
 	for _, nodeGroup := range nodeGroups {
-		if !context.ClusterStateRegistry.IsNodeGroupSafeToScaleUp(nodeGroup.Id(), now) {
+		// Check only for groups that exists or are not auto provisioned.
+		if (!nodeGroup.Autoprovisioned() || nodeGroup.Exist()) && !context.ClusterStateRegistry.IsNodeGroupSafeToScaleUp(nodeGroup.Id(), now) {
 			glog.Warningf("Node group %s is not ready for scaleup", nodeGroup.Id())
 			continue
 		}
