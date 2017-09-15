@@ -23,6 +23,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/golang/glog"
 	gce "google.golang.org/api/compute/v1"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -39,19 +40,24 @@ type templateBuilder struct {
 }
 
 func (t *templateBuilder) getMigTemplate(mig *Mig) (*gce.InstanceTemplate, error) {
+	glog.Warning("getMigTemplate")
 	igm, err := t.service.InstanceGroupManagers.Get(mig.Project, mig.Zone, mig.Name).Do()
 	if err != nil {
+		glog.Warning("getMigTemplate1 %v", err)
 		return nil, err
 	}
+	glog.Warning("getMigTemplate1")
 	templateUrl, err := url.Parse(igm.InstanceTemplate)
 	if err != nil {
 		return nil, err
 	}
+	glog.Warning("getMigTemplate2")
 	_, templateName := path.Split(templateUrl.EscapedPath())
 	instanceTemplate, err := t.service.InstanceTemplates.Get(mig.Project, templateName).Do()
 	if err != nil {
 		return nil, err
 	}
+	glog.Warning("getMigTemplate3")
 	return instanceTemplate, nil
 }
 

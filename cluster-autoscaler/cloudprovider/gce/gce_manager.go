@@ -182,16 +182,19 @@ func (m *GceManager) fetchAllNodePools() error {
 	}
 
 	existingMigs := map[GceRef]struct{}{}
-
+	glog.Warning("fetchAllNodePools")
 	for _, nodePool := range nodePoolsResponse.NodePools {
-		autoprovisioned := strings.Contains("name", nodeAutoprovisioningPrefix)
+		glog.Warning("fetchAllNodePools2")
+		autoprovisioned := strings.Contains(nodePool.Name, nodeAutoprovisioningPrefix)
 		autoscaled := nodePool.Autoscaling != nil && nodePool.Autoscaling.Enabled
 		if !autoprovisioned && !autoscaled {
 			continue
 		}
+		glog.Warning("fetchAllNodePools3")
 		// format is
 		// "https://www.googleapis.com/compute/v1/projects/mwielgus-proj/zones/europe-west1-b/instanceGroupManagers/gke-cluster-1-default-pool-ba78a787-grp"
 		for _, igurl := range nodePool.InstanceGroupUrls {
+			glog.Warning("fetchAllNodePools4")
 			project, zone, name, err := parseGceUrl(igurl, "instanceGroupManagers")
 			if err != nil {
 				return err
@@ -220,6 +223,7 @@ func (m *GceManager) fetchAllNodePools() error {
 		}
 	}
 	for _, mig := range m.getMigs() {
+		glog.Warning("fetchAllNodePools5")
 		if _, found := existingMigs[mig.config.GceRef]; !found {
 			m.UnregisterMig(mig.config)
 		}
