@@ -159,6 +159,13 @@ func (gce *GceCloudProvider) NewNodeGroup(machineType string, labels map[string]
 
 // GetResourceLimiter returns struct containing limits (max, min) for resources (cores, memory etc.).
 func (gce *GceCloudProvider) GetResourceLimiter() (*cloudprovider.ResourceLimiter, error) {
+	resourceLimiter, err := gce.gceManager.GetResourceLimiter()
+	if err != nil {
+		return nil, err
+	}
+	if resourceLimiter != nil {
+		return resourceLimiter, nil
+	}
 	return gce.resourceLimiter, nil
 }
 

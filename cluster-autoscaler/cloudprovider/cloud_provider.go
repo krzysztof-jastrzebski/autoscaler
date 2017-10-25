@@ -147,9 +147,9 @@ type PricingModel interface {
 
 const (
 	// ResourceNameCores is string name for cores. It's used by ResourceLimiter.
-	ResourceNameCores = "resource_name_cores"
+	ResourceNameCores = "cpu"
 	// ResourceNameMemory is string name for memory. It's used by ResourceLimiter.
-	ResourceNameMemory = "resource_name_memory"
+	ResourceNameMemory = "memory"
 )
 
 // ResourceLimiter contains limits (max, min) for resources (cores, memory etc.).
