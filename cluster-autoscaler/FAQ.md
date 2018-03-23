@@ -29,6 +29,7 @@ this document:
   * [How can I scale my cluster to just 1 node?](#how-can-i-scale-my-cluster-to-just-1-node)
   * [How can I scale a node group to 0?](#how-can-i-scale-a-node-group-to-0)
   * [How can I prevent Cluster Autoscaler from scaling down a particular node?](#how-can-i-prevent-cluster-autoscaler-from-scaling-down-a-particular-node)
+  * [How can I configure overprovisioning with Cluster Autoscaler?](#how-can-i-configure-overprovisioning-with-cluster-autoscaler)
 * [Internals](#internals)
   * [Are all of the mentioned heuristics and timings final?](#are-all-of-the-mentioned-heuristics-and-timings-final)
   * [How does scale-up work?](#how-does-scale-up-work)
@@ -302,6 +303,112 @@ It can be added to (or removed from) a node using kubectl:
 
 ```
 kubectl annotate node <nodename> cluster-autoscaler.kubernetes.io/scale-down-disabled=true
+```
+
+### How can I configure overprovisioning with Cluster Autoscaler?
+
+Below solution works since version 1.1 (to be shipped with Kubernetes 1.9).
+
+Overprovisioning can be configured by creating deployment which:
+ * reserves resources proportional to the number of cores in the cluster (i.e 200 millicores per core),
+ * frees resources when they are needed to schedule new pods,
+ * forces Cluster Autoscaler to scale up the cluster when there is not enough free resoures.
+
+Deployment described above can be created using [Priority Preemption](https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/)
+and [Horizontal Cluster Proportional Autoscaler](https://github.com/kubernetes-incubator/cluster-proportional-autoscaler)
+
+Configuration:
+
+1. Enable priority preemption in your cluster. It can be done by exporting following env
+variables before executing kube-up (more details [here](https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/)):
+```sh
+export KUBE_RUNTIME_CONFIG=scheduling.k8s.io/v1alpha1=true
+export ENABLE_POD_PRIORITY=true
+```
+
+2. Define priority classes. Priority 0 will be reserved for overprovisioning pods as it is the lowest
+priority that triggers scaling clusters. Other pods need to use priorities above 0 in order to be
+able to preempt overprovisioning pods. You can use folowing deninitions:
+
+```yaml
+apiVersion: scheduling.k8s.io/v1alpha1
+kind: PriorityClass
+metadata:
+  name: normal
+value: 1
+globalDefault: true
+description: "Normal."
+---
+apiVersion: scheduling.k8s.io/v1alpha1
+kind: PriorityClass
+metadata:
+  name: overprovisioning
+value: 0
+globalDefault: false
+description: "Priority class used by overprovisioning."
+```
+
+3. Create service account that will be used by Horizontal Cluster Proportional Autoscaler which needs
+specific roles. More details [here](https://github.com/kubernetes-incubator/cluster-proportional-autoscaler/tree/master/examples#rbac-configurations)
+
+4. Create deployments that will reserve resources. "overprovisioning" deployment will reserve
+resources and "overprovisioning-autoscaler" deployment will change the size of reserved resources.
+You can use folowing definitions (you need to change service account for "overprovisioning-autoscaler" deployment to the one
+created in the previous step):
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overprovisioning
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: overprovisioning
+  template:
+    metadata:
+      labels:
+        run: overprovisioning
+    spec:
+      priorityClassName: overprovisioning
+      containers:
+      - name: reserve-resources
+        image: gcr.io/google_containers/pause
+        resources:
+          requests:
+            cpu: "200m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overprovisioning-autoscaler
+  namespace: default
+  labels:
+    app: overprovisioning-autoscaler
+spec:
+  selector:
+    matchLabels:
+      app: overprovisioning-autoscaler
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: overprovisioning-autoscaler
+    spec:
+      containers:
+        - image: gcr.io/google_containers/cluster-proportional-autoscaler-amd64:1.1.2
+          name: autoscaler
+          command:
+            - /cluster-proportional-autoscaler
+            - --namespace=default
+            - --configmap=overprovisioning-autoscaler
+            - --default-params={"linear":{"coresPerReplica":1}}
+            - --target=deployment/overprovisioning
+            - --logtostderr=true
+            - --v=2
+      serviceAccountName: cluster-proportional-autoscaler-service-account
 ```
 
 ****************
