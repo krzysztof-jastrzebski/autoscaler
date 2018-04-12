@@ -21,9 +21,20 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/simulator"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/errors"
 	kube_util "k8s.io/autoscaler/cluster-autoscaler/utils/kubernetes"
+	"k8s.io/autoscaler/cluster-autoscaler/utils/pods"
 	kube_client "k8s.io/client-go/kubernetes"
 	kube_record "k8s.io/client-go/tools/record"
 )
+
+// AutoscalerBuilderOptions contain various options to customize how autoscaler is created.
+type AutoscalerBuilderOptions struct {
+	AutoscalingOptions AutoscalingOptions
+	KubeClient         kube_client.Interface
+	KubeEventRecorder  kube_record.EventRecorder
+	PredicateChecker   *simulator.PredicateChecker
+	ListerRegistry     kube_util.ListerRegistry
+	PodListProcessor   pods.PodListProcessor
+}
 
 // AutoscalerBuilder builds an instance of Autoscaler which is the core of CA
 type AutoscalerBuilder interface {
@@ -34,24 +45,19 @@ type AutoscalerBuilder interface {
 // AutoscalerBuilderImpl builds new autoscalers from its state including initial `AutoscalingOptions` given at startup and
 // `dynamic.Config` read on demand from the configmap
 type AutoscalerBuilderImpl struct {
-	autoscalingOptions AutoscalingOptions
-	dynamicConfig      *dynamic.Config
-	kubeClient         kube_client.Interface
-	kubeEventRecorder  kube_record.EventRecorder
-	predicateChecker   *simulator.PredicateChecker
-	listerRegistry     kube_util.ListerRegistry
+	options       AutoscalerBuilderOptions
+	dynamicConfig *dynamic.Config
 }
 
 // NewAutoscalerBuilder builds an AutoscalerBuilder from required parameters
-func NewAutoscalerBuilder(autoscalingOptions AutoscalingOptions, predicateChecker *simulator.PredicateChecker,
-	kubeClient kube_client.Interface, kubeEventRecorder kube_record.EventRecorder, listerRegistry kube_util.ListerRegistry) *AutoscalerBuilderImpl {
-	return &AutoscalerBuilderImpl{
-		autoscalingOptions: autoscalingOptions,
-		kubeClient:         kubeClient,
-		kubeEventRecorder:  kubeEventRecorder,
-		predicateChecker:   predicateChecker,
-		listerRegistry:     listerRegistry,
+func NewAutoscalerBuilder(options AutoscalerBuilderOptions) *AutoscalerBuilderImpl {
+	builder := &AutoscalerBuilderImpl{
+		options: options,
 	}
+	if builder.options.PodListProcessor == nil {
+		builder.options.PodListProcessor = pods.NewPodListProcessor()
+	}
+	return builder
 }
 
 // SetDynamicConfig sets an instance of dynamic.Config read from a configmap so that
@@ -63,10 +69,15 @@ func (b *AutoscalerBuilderImpl) SetDynamicConfig(config dynamic.Config) Autoscal
 
 // Build an autoscaler according to the builder's state
 func (b *AutoscalerBuilderImpl) Build() (Autoscaler, errors.AutoscalerError) {
-	options := b.autoscalingOptions
 	if b.dynamicConfig != nil {
 		c := *(b.dynamicConfig)
-		options.NodeGroups = c.NodeGroupSpecStrings()
+		b.options.AutoscalingOptions.NodeGroups = c.NodeGroupSpecStrings()
 	}
-	return NewStaticAutoscaler(options, b.predicateChecker, b.kubeClient, b.kubeEventRecorder, b.listerRegistry)
+	return NewStaticAutoscaler(
+		b.options.AutoscalingOptions,
+		b.options.PredicateChecker,
+		b.options.KubeClient,
+		b.options.KubeEventRecorder,
+		b.options.ListerRegistry,
+		b.options.PodListProcessor)
 }

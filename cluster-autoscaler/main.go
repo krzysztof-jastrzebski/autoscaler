@@ -250,7 +250,15 @@ func run(healthCheck *metrics.HealthCheck) {
 	}
 	listerRegistryStopChannel := make(chan struct{})
 	listerRegistry := kube_util.NewListerRegistryWithDefaultListers(kubeClient, listerRegistryStopChannel)
-	autoscaler, err := core.NewAutoscaler(opts, predicateChecker, kubeClient, kubeEventRecorder, listerRegistry)
+	builderOpts := core.AutoscalerBuilderOptions{
+		AutoscalingOptions: opts.AutoscalingOptions,
+		PredicateChecker:   predicateChecker,
+		KubeClient:         kubeClient,
+		KubeEventRecorder:  kubeEventRecorder,
+		ListerRegistry:     listerRegistry,
+	}
+	autoscalerBuilder := core.NewAutoscalerBuilder(builderOpts)
+	autoscaler, err := core.NewAutoscaler(autoscalerBuilder, opts, kubeClient, kubeEventRecorder)
 	if err != nil {
 		glog.Fatalf("Failed to create autoscaler: %v", err)
 	}

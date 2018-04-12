@@ -67,7 +67,15 @@ func TestNewAutoscalerStatic(t *testing.T) {
 	}
 	predicateChecker := simulator.NewTestPredicateChecker()
 	listerRegistry := kube_util.NewListerRegistry(nil, nil, nil, nil, nil, nil)
-	a, _ := NewAutoscaler(opts, predicateChecker, fakeClient, kubeEventRecorder, listerRegistry)
+	builderOpts := AutoscalerBuilderOptions{
+		AutoscalingOptions: opts.AutoscalingOptions,
+		PredicateChecker:   predicateChecker,
+		KubeClient:         fakeClient,
+		KubeEventRecorder:  kubeEventRecorder,
+		ListerRegistry:     listerRegistry,
+	}
+	autoscalerBuilder := NewAutoscalerBuilder(builderOpts)
+	a, _ := NewAutoscaler(autoscalerBuilder, opts, fakeClient, kubeEventRecorder)
 	assert.IsType(t, &StaticAutoscaler{}, a)
 }
 
@@ -104,6 +112,14 @@ func TestNewAutoscalerDynamic(t *testing.T) {
 	}
 	predicateChecker := simulator.NewTestPredicateChecker()
 	listerRegistry := kube_util.NewListerRegistry(nil, nil, nil, nil, nil, nil)
-	a, _ := NewAutoscaler(opts, predicateChecker, fakeClient, kubeEventRecorder, listerRegistry)
+	builderOpts := AutoscalerBuilderOptions{
+		AutoscalingOptions: opts.AutoscalingOptions,
+		PredicateChecker:   predicateChecker,
+		KubeClient:         fakeClient,
+		KubeEventRecorder:  kubeEventRecorder,
+		ListerRegistry:     listerRegistry,
+	}
+	autoscalerBuilder := NewAutoscalerBuilder(builderOpts)
+	a, _ := NewAutoscaler(autoscalerBuilder, opts, fakeClient, kubeEventRecorder)
 	assert.IsType(t, &DynamicAutoscaler{}, a)
 }
