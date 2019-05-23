@@ -1755,6 +1755,7 @@ func TestSoftTaintTimeLimit(t *testing.T) {
 func TestWaitForDelayDeletion(t *testing.T) {
 	type testcase struct {
 		name                 string
+		timeout              time.Duration
 		addAnnotation        bool
 		removeAnnotation     bool
 		expectCallingGetNode bool
@@ -1762,16 +1763,25 @@ func TestWaitForDelayDeletion(t *testing.T) {
 	tests := []testcase{
 		{
 			name:             "annotation not set",
+			timeout:          6 * time.Second,
 			addAnnotation:    false,
 			removeAnnotation: false,
 		},
 		{
 			name:             "annotation set and removed",
+			timeout:          6 * time.Second,
 			addAnnotation:    true,
 			removeAnnotation: true,
 		},
 		{
 			name:             "annotation set but not removed",
+			timeout:          6 * time.Second,
+			addAnnotation:    true,
+			removeAnnotation: false,
+		},
+		{
+			name:             "timeout is 0 - mechanism disable",
+			timeout:          0 * time.Second,
 			addAnnotation:    true,
 			removeAnnotation: false,
 		},
@@ -1794,9 +1804,9 @@ func TestWaitForDelayDeletion(t *testing.T) {
 			}
 			var err error
 			if test.addAnnotation {
-				err = waitForDelayDeletion(nodeWithAnnotation, allNodeLister, 6*time.Second)
+				err = waitForDelayDeletion(nodeWithAnnotation, allNodeLister, test.timeout)
 			} else {
-				err = waitForDelayDeletion(node, allNodeLister, 6*time.Second)
+				err = waitForDelayDeletion(node, allNodeLister, test.timeout)
 			}
 			assert.NoError(t, err)
 		})
